@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/avatar_helper.dart';
+import '../../services/firebase_service.dart';
+import '../../models/lost_item.dart';
 import 'post_lost_item_screen.dart';
 import 'item_detail_screen.dart';
 
@@ -13,171 +17,240 @@ class LostFoundTab extends StatefulWidget {
 
 class _LostFoundTabState extends State<LostFoundTab> {
   int _selectedFilter = 0;
-  final List<String> _filters = ['All', 'Lost', 'Found', 'Electronics', 'Documents'];
+  final List<String> _filters = ['All', 'Lost', 'Found'];
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 180, floating: false, pinned: true, backgroundColor: AppTheme.teal,
-            leading: IconButton(
-              icon: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle), child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20)),
-              onPressed: () => Navigator.pop(context),
+  String _formatTime(dynamic timestamp) {
+    if (timestamp == null) return 'now';
+    final dateTime = timestamp as DateTime;
+    final now = DateTime.now();
+    final diff = now.difference(dateTime);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+    if (diff.inHours < 24) return '${diff.inHours}h';
+    return '${diff.inDays}d';
+  }
+
+  IconData _getItemIcon(String title) {
+    final lowerTitle = title.toLowerCase();
+    if (lowerTitle.contains('charger') || lowerTitle.contains('power')) {
+      return Icons.power;
+    } else if (lowerTitle.contains('id') || lowerTitle.contains('card')) {
+      return Icons.card_membership;
+    } else if (lowerTitle.contains('umbrella')) {
+      return Icons.umbrella;
+    } else if (lowerTitle.contains('earbuds') || lowerTitle.contains('headphones')) {
+      return Icons.headset;
+    } else if (lowerTitle.contains('laptop') || lowerTitle.contains('book')) {
+      return Icons.laptop;
+    }
+    return Icons.inventory_2;
+  }
+
+  Widget _buildItemCard(BuildContext context, LostItem item) {
+    final isFound = item.isFound;
+    final statusColor = isFound ? Colors.green : Colors.orange;
+    final statusLabel = isFound ? 'FOUND' : 'LOST';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ItemDetailScreen(
+              title: item.title,
+              description: item.description,
+              location: item.location,
+              time: _formatTime(item.timestamp),
+              status: statusLabel,
+              statusColor: statusColor,
+              imageUrl: item.imageUrl,
             ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF0D9488), Color(0xFF0F766E), Color(0xFF115E59)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
-                child: Stack(
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Stack(
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: item.imageUrl.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CachedNetworkImage(
+                            imageUrl: item.imageUrl,
+                            fit: BoxFit.cover,
+                            width: 80,
+                            height: 80,
+                            placeholder: (context, url) => Container(
+                              color: statusColor.withOpacity(0.3),
+                              child: const Icon(Icons.image, color: Colors.grey),
+                            ),
+                            errorWidget: (context, url, error) => Icon(
+                              _getItemIcon(item.title),
+                              size: 32,
+                              color: statusColor,
+                            ),
+                          ),
+                        )
+                      : Icon(
+                          _getItemIcon(item.title),
+                          size: 32,
+                          color: statusColor.withOpacity(0.8),
+                        ),
+                  ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Positioned(right: -20, bottom: -20, child: Icon(Icons.manage_search_rounded, size: 160, color: Colors.white.withValues(alpha: 0.06))),
-                    Positioned(
-                      left: 24, right: 24, bottom: 24,
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                        const Text('Lost & Found', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-                        const SizedBox(height: 6),
-                        Text('Report and recover items on campus.', style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
-                      ]),
+                    Text(
+                      item.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.description,
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: avatarColor(item.postedBy),
+                          child: Text(
+                            initials(item.postedBy),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            item.postedBy,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        Text(_formatTime(item.timestamp), style: TextStyle(color: Colors.grey)),
+                      ],
                     ),
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Lost & Found'),
+        backgroundColor: Theme.of(context).primaryColor,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: const [
+                Expanded(child: TextField(decoration: InputDecoration(hintText: 'Search items', prefixIcon: Icon(Icons.search)))),
+              ],
             ),
           ),
-
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Column(children: [
-                Row(children: [
-                  _buildStatBox('12', 'Lost', AppTheme.coral, const Color(0xFFFEE2E2)),
-                  const SizedBox(width: 10),
-                  _buildStatBox('8', 'Found', AppTheme.emerald, const Color(0xFFD1FAE5)),
-                  const SizedBox(width: 10),
-                  _buildStatBox('4', 'Pending', AppTheme.primary, const Color(0xFFEEF2FF)),
-                ]),
-                const SizedBox(height: 18),
-                Container(
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: AppTheme.softShadow),
-                  child: TextField(decoration: InputDecoration(hintText: 'Search lost items...', prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary), border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none, contentPadding: const EdgeInsets.symmetric(vertical: 16))),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  height: 38,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal, itemCount: _filters.length,
-                    itemBuilder: (context, index) {
-                      final isSelected = _selectedFilter == index;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedFilter = index),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                          decoration: BoxDecoration(
-                            gradient: isSelected ? const LinearGradient(colors: [Color(0xFF0D9488), Color(0xFF0F766E)]) : null,
-                            color: isSelected ? null : Colors.white, borderRadius: BorderRadius.circular(10),
-                            border: isSelected ? null : Border.all(color: AppTheme.cardBorder),
-                          ),
-                          child: Center(child: Text(_filters[index], style: TextStyle(color: isSelected ? Colors.white : AppTheme.textSecondary, fontWeight: FontWeight.w600, fontSize: 13))),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ]),
-            ),
-          ),
-
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildItemCard(context, title: 'MacBook Pro Charger', description: 'Left in Library Room 204, near window seats.', location: 'Central Library', time: '2h ago', status: 'Lost', statusColor: AppTheme.coral, itemIcon: Icons.power_rounded, poster: 'Sarah Miller'),
-                const SizedBox(height: 14),
-                _buildItemCard(context, title: 'Student ID Card', description: 'Found near cafeteria entrance. Blue lanyard.', location: 'Student Cafeteria', time: '5h ago', status: 'Found', statusColor: AppTheme.emerald, itemIcon: Icons.badge_rounded, poster: 'Jamie Chen'),
-                const SizedBox(height: 14),
-                _buildItemCard(context, title: 'Black Umbrella', description: 'Compact with wooden handle. Left in Lecture Hall B.', location: 'Lecture Hall B', time: 'Yesterday', status: 'Lost', statusColor: AppTheme.coral, itemIcon: Icons.umbrella_rounded, poster: 'Marcus Wright'),
-                const SizedBox(height: 14),
-                _buildItemCard(context, title: 'Wireless Earbuds Case', description: 'White AirPods case on bench outside Engineering.', location: 'Engineering Block', time: 'Yesterday', status: 'Found', statusColor: AppTheme.emerald, itemIcon: Icons.headphones_rounded, poster: 'Aisha Lindholm'),
-                const SizedBox(height: 80),
-              ]),
+          Expanded(
+            child: StreamBuilder<List<LostItem>>(
+              stream: FirebaseService().lostItemsStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final items = snapshot.data ?? [];
+                if (items.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.search_off, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text('No items found'),
+                        Text('Post the first lost item!'),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  itemCount: items.length,
+                  itemBuilder: (context, index) => _buildItemCard(context, items[index]),
+                );
+              },
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PostLostItemScreen())),
-        backgroundColor: AppTheme.coral, elevation: 8,
-        icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: const Text('Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-      ),
-    );
-  }
-
-  Widget _buildStatBox(String count, String label, Color textColor, Color bgColor) {
-    return Expanded(child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(14)),
-      child: Column(children: [
-        Text(count, style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 2),
-        Text(label, style: TextStyle(color: textColor, fontSize: 11, fontWeight: FontWeight.w600)),
-      ]),
-    ));
-  }
-
-  Widget _buildItemCard(BuildContext context, {
-    required String title, required String description, required String location,
-    required String time, required String status, required Color statusColor,
-    required IconData itemIcon, required String poster,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => ItemDetailScreen(title: title, description: description, location: location, time: time, status: status, statusColor: statusColor, imageUrl: '')));
-      },
-      child: Container(
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: AppTheme.softShadow),
-        child: Row(
-          children: [
-            // Icon placeholder instead of network image
-            Container(
-              width: 100, height: 120,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [statusColor.withValues(alpha: 0.15), statusColor.withValues(alpha: 0.05)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
-              ),
-              child: Center(child: Icon(itemIcon, size: 40, color: statusColor.withValues(alpha: 0.6))),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(status, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w800))),
-                    Text(time, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-                  ]),
-                  const SizedBox(height: 8),
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                  const SizedBox(height: 4),
-                  Text(description, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    avatarWidget(poster, radius: 10),
-                    const SizedBox(width: 6),
-                    Text(poster, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
-                    const Spacer(),
-                    const Icon(Icons.location_on_rounded, size: 13, color: AppTheme.textSecondary),
-                    const SizedBox(width: 3),
-                    Flexible(child: Text(location, style: const TextStyle(fontSize: 10, color: AppTheme.textSecondary), overflow: TextOverflow.ellipsis)),
-                  ]),
-                ]),
-              ),
-            ),
-          ],
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PostLostItemScreen()),
         ),
+        icon: const Icon(Icons.add),
+        label: const Text('Post Item'),
       ),
     );
   }
 }
+

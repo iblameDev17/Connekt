@@ -1,10 +1,23 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/avatar_helper.dart';
-import 'chat_detail_screen.dart';
+import '../../services/firebase_service.dart';
+import '../../models/group_message.dart';
+import 'GlobalGroupChatScreen.dart';
 
 class ChatTab extends StatelessWidget {
   const ChatTab({super.key});
+
+  String _formatTime(dynamic timestamp) {
+    if (timestamp == null) return '';
+    final date = timestamp;
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inMinutes < 1) return 'now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m';
+    if (diff.inDays < 1) return '${diff.inHours}h';
+    return '${date.hour}:${date.minute}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,163 +32,91 @@ class ChatTab extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text('Messages', style: Theme.of(context).textTheme.displaySmall?.copyWith(fontSize: 26)),
+                      const Text('Group Chat', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), boxShadow: AppTheme.softShadow),
-                        child: const Icon(Icons.edit_rounded, color: AppTheme.primary, size: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: AppTheme.softShadow,
+                        ),
+                        child: const Icon(Icons.group_add, color: AppTheme.primary),
                       ),
                     ],
                   ),
                   const SizedBox(height: 18),
                   Container(
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: AppTheme.softShadow),
-                    child: TextField(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: AppTheme.softShadow,
+                    ),
+                    child: const TextField(
                       decoration: InputDecoration(
-                        hintText: 'Search conversations...',
-                        prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.textSecondary),
-                        border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                        hintText: 'Search messages...',
+                        prefixIcon: Icon(Icons.search_rounded),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // Online avatars
-                  SizedBox(
-                    height: 80,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        _buildOnlineAvatar('Sarah', true),
-                        _buildOnlineAvatar('Prof.', true),
-                        _buildOnlineAvatar('Jamie', false),
-                        _buildOnlineAvatar('Marcus', true),
-                        _buildOnlineAvatar('Aisha', false),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
                 ],
               ),
             ),
-
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Text('RECENT', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
-                  ),
-                  _buildChatTile(context, 'Sarah Miller', 'That presentation looked great! Se...', '10:42 AM', unread: 2),
-                  _buildChatTile(context, 'Prof. Aris', 'Please review the syllabus for next w...', 'Yesterday'),
-                  _buildChatTile(context, 'Ghost #482', 'New anonymous message received...', '2:15 PM', isGhost: true),
-                  _buildChatTile(context, 'Jamie Chen', 'The coffee at the student union is fin...', 'Tue'),
-                  _buildChatTile(context, 'Marcus Wright', 'Sent a photo', 'Oct 12'),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOnlineAvatar(String name, bool isOnline) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16),
-      child: Column(
-        children: [
-          SizedBox(
-            width: 56,
-            height: 56,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                avatarWidget(name, radius: 26),
-                if (isOnline)
-                  Positioned(
-                    bottom: 2,
-                    right: 2,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: AppTheme.emerald,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.background, width: 2),
+              child: StreamBuilder<List<GroupMessage>>(
+                stream: FirebaseService().groupChatStream,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final messages = snapshot.data ?? [];
+                  if (messages.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text('No messages yet'),
+                          Text('Messages appear here'),
+                        ],
                       ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(name, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChatTile(BuildContext context, String name, String message, String time, {int unread = 0, bool isGhost = false}) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(context, MaterialPageRoute(
-          builder: (_) => ChatDetailScreen(userName: name, userInitial: initials(name), avatarColor: isGhost ? AppTheme.anonPurple : avatarColor(name)),
-        ));
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isGhost ? const Color(0xFFF5F3FF) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: const [BoxShadow(color: Color(0x06000000), blurRadius: 10, offset: Offset(0, 2))],
-        ),
-        child: Row(
-          children: [
-            isGhost
-                ? Container(
-                    width: 52, height: 52,
-                    decoration: BoxDecoration(gradient: AppTheme.ghostGradient, borderRadius: BorderRadius.circular(16)),
-                    child: const Icon(Icons.visibility_off_rounded, color: Colors.white, size: 22),
-                  )
-                : avatarWidget(name, radius: 26),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(name, style: TextStyle(color: isGhost ? AppTheme.anonPurple : AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
-                      Text(time, style: TextStyle(color: unread > 0 ? AppTheme.primary : AppTheme.textSecondary, fontSize: 12, fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w500)),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(message, style: TextStyle(color: isGhost ? const Color(0xFF7C3AED) : AppTheme.textSecondary, fontSize: 13, fontWeight: unread > 0 ? FontWeight.w600 : FontWeight.normal, fontStyle: isGhost ? FontStyle.italic : FontStyle.normal), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ),
-                      if (unread > 0)
-                        Container(
-                          margin: const EdgeInsets.only(left: 8), width: 22, height: 22,
-                          decoration: const BoxDecoration(gradient: AppTheme.primaryGradient, shape: BoxShape.circle),
-                          child: Center(child: Text('$unread', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700))),
+                    );
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: messages.length,
+                    reverse: true,
+                    itemBuilder: (context, index) {
+                      final msg = messages[index];
+                      return ListTile(
+                        dense: true,
+                        leading: CircleAvatar(
+                          radius: 20,
+                          backgroundColor: avatarColor(msg.senderName),
+                          child: Text(initials(msg.senderName)),
                         ),
-                    ],
-                  ),
-                ],
+                        title: Text(msg.senderName, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(msg.text, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        trailing: Text(_formatTime(msg.timestamp), style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GlobalGroupChatScreen())),
+        backgroundColor: AppTheme.primary,
+        child: const Icon(Icons.chat, color: Colors.white),
       ),
     );
   }
 }
+

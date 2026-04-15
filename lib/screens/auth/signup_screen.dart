@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../main_screen.dart';
+import '../../services/firebase_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -54,7 +55,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(28),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 24, offset: const Offset(0, 8)),
+                    BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 24, offset: const Offset(0, 8)),
                   ],
                 ),
                 child: Column(
@@ -89,9 +90,9 @@ class _SignupScreenState extends State<SignupScreen> {
                               text: 'I agree to the ',
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 13),
                               children: const [
-                                TextSpan(text: 'Terms', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700)),
+                                TextSpan(text: 'Terms', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700)),
                                 TextSpan(text: ' and '),
-                                TextSpan(text: 'Privacy Policy', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w700)),
+                                TextSpan(text: 'Privacy Policy', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w700)),
                               ],
                             ),
                           ),
@@ -103,14 +104,13 @@ class _SignupScreenState extends State<SignupScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
-                        },
+                        onPressed: _isAgreed ? _handleSignup : null,
                         style: ElevatedButton.styleFrom(
+                          backgroundColor: _isAgreed ? AppTheme.primary : Colors.grey,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
-                        child: const Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                        child: const Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
                       ),
                     ),
                   ],
@@ -150,9 +150,42 @@ class _SignupScreenState extends State<SignupScreen> {
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: Icon(icon, color: AppTheme.textSecondary, size: 20),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppTheme.primary, width: 2),
+            ),
           ),
         ),
       ],
     );
   }
+
+  Future<void> _handleSignup() async {
+    if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty || _confirmController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields')));
+      return;
+    }
+    if (_passwordController.text != _confirmController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Creating account...')));
+    final service = FirebaseService();
+    final cred = await service.signUp(_emailController.text.trim(), _passwordController.text, _nameController.text.trim());
+    if (cred != null) {
+      if (context.mounted) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
+      }
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Signup failed. Try again.')));
+      }
+    }
+  }
 }
+

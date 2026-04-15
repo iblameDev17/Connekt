@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'auth_provider.dart';
 import 'theme/app_theme.dart';
-import 'screens/splash_screen.dart';
-void main() {
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Make status bar transparent for a modern look
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
     ),
   );
-
-  runApp(const CampusHiveApp());
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(const ConnektApp());
 }
 
-class CampusHiveApp extends StatelessWidget {
-  const CampusHiveApp({Key? key}) : super(key: key);
+class ConnektApp extends StatelessWidget {
+  const ConnektApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +26,8 @@ class CampusHiveApp extends StatelessWidget {
       title: 'Connekt',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
-      home: const SplashScreen(), 
+      home: const AuthProvider(),
     );
   }
 }
+

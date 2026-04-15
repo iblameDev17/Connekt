@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/avatar_helper.dart';
 import '../../services/firebase_service.dart';
 import '../../models/group_message.dart';
 
 class GlobalGroupChatScreen extends StatefulWidget {
-  const GlobalGroupChatScreen({super.key});
+  const GlobalGroupChatScreen({Key? key}) : super(key: key);
 
   @override
   State<GlobalGroupChatScreen> createState() => _GlobalGroupChatScreenState();
@@ -20,11 +20,7 @@ class _GlobalGroupChatScreenState extends State<GlobalGroupChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
     });
   }
 
@@ -35,80 +31,39 @@ class _GlobalGroupChatScreenState extends State<GlobalGroupChatScreen> {
     super.dispose();
   }
 
-  String _formatTime(Timestamp timestamp) {
-    final dateTime = timestamp.toDate();
+  String _formatTime(dynamic timestamp) {
+    if (timestamp == null) return '';
+    final date = timestamp is Timestamp ? timestamp.toDate() : timestamp as DateTime;
     final now = DateTime.now();
-    final diff = now.difference(dateTime);
+    final diff = now.difference(date);
     if (diff.inMinutes < 1) return 'now';
     if (diff.inHours < 1) return '${diff.inMinutes}m';
     if (diff.inDays < 1) return '${diff.inHours}h';
-    return '${dateTime.day}/${dateTime.month} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+    return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
-  Future<void> _sendMessage() async {
+  void _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
-    FirebaseService().sendGroupMessage(text);
+    await FirebaseService().sendGroupMessage(text);
     _messageController.clear();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 0,
         title: Row(
           children: [
-            Stack(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: const BoxDecoration(
-                    color: Colors.blue,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.group, color: Colors.white, size: 24),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: const BoxDecoration(
-                      color: Colors.green,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 12),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Campus Group',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                Text(
-                  '42 members · online',
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-              ],
-            ),
+            const Icon(Icons.group, color: Colors.white),
+            const SizedBox(width: 8),
+            const Text('Campus Group', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        actions: [
-          IconButton(icon: const Icon(Icons.videocam), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
-        ],
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
@@ -117,49 +72,48 @@ class _GlobalGroupChatScreenState extends State<GlobalGroupChatScreen> {
               stream: FirebaseService().groupChatStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Colors.blue));
+                  return const Center(child: CircularProgressIndicator());
                 }
                 final messages = snapshot.data ?? [];
                 if (messages.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey),
-                        const SizedBox(height: 16),
-                        const Text('No messages yet', style: TextStyle(fontSize: 20)),
-                        const SizedBox(height: 8),
-                        Text('Get the conversation started!', style: TextStyle(color: Colors.grey)),
+                      children: const [
+                        Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text('No messages yet'),
+                        Text('Send the first message!'),
                       ],
                     ),
                   );
                 }
                 return ListView.builder(
                   controller: _scrollController,
+                  reverse: true,
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
-                  reverse: true,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    final isMe = message.senderId == FirebaseService().currentUser?.uid;
+                    final isMe = message.senderId == FirebaseAuth.instance.currentUser?.uid;
                     return Align(
                       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                        margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: isMe ? const Color(0xFF007AFF) : Colors.white,
+                          color: isMe ? AppTheme.primary : Colors.white,
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
+                              color: Colors.black.withOpacity(0.1),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                           children: [
                             Text(
                               message.text,
@@ -179,7 +133,7 @@ class _GlobalGroupChatScreenState extends State<GlobalGroupChatScreen> {
                                     fontSize: 12,
                                   ),
                                 ),
-                                if (isMe) const Icon(Icons.done_all, size: 16, color: Colors.white70),
+                                if (isMe) const Icon(Icons.check, color: Colors.white70, size: 16),
                               ],
                             ),
                           ],
@@ -191,58 +145,37 @@ class _GlobalGroupChatScreenState extends State<GlobalGroupChatScreen> {
               },
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(8.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
-              ],
-            ),
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.emoji_emotions_outlined),
-                  onPressed: () {},
-                ),
-                const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
                     decoration: InputDecoration(
-                      hintText: 'Message...',
+                      hintText: 'Type message...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide(color: Colors.blue),
+                        borderSide: BorderSide(color: AppTheme.primary),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       filled: true,
-                      fillColor: Colors.grey[100],
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     ),
                     maxLines: null,
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _sendMessage,
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF007AFF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.send, color: Colors.white),
-                  ),
+                const SizedBox(width: 12),
+                FloatingActionButton(
+                  mini: true,
+                  onPressed: _sendMessage,
+                  backgroundColor: AppTheme.primary,
+                  child: const Icon(Icons.send, color: Colors.white),
                 ),
               ],
             ),

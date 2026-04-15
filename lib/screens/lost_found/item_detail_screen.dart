@@ -114,7 +114,7 @@ class ItemDetailScreen extends StatelessWidget {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatDetailScreen(userName: 'Sarah Miller', userInitial: 'SM', avatarColor: AppTheme.primary)));
+Navigator.push(context, MaterialPageRoute(builder: (_) => const GlobalGroupChatScreen()));
                       },
                       icon: const Icon(Icons.chat_bubble_rounded, size: 20),
                       label: const Text('Contact via Chat'),

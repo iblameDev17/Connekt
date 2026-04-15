@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/avatar_helper.dart';
 import '../main_screen.dart';
 import '../lost_found/lost_found_tab.dart';
 import '../study_groups/study_groups_tab.dart';
+import '../../services/firebase_service.dart';
+import '../../models/user.dart' as AppUser;
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -14,6 +17,13 @@ class DashboardTab extends StatefulWidget {
 
 class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMixin {
   late AnimationController _staggerController;
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'morning';
+    if (hour < 17) return 'afternoon';
+    return 'evening';
+  }
 
   @override
   void initState() {
@@ -64,17 +74,23 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                         child: CircleAvatar(
                           radius: 22,
                           backgroundColor: Colors.white,
-                          child: avatarWidget('Alex Johnson', radius: 20),
+                          child: avatarWidget('User', radius: 20),
                         ),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Good evening,', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 13)),
-                            Text('Alex Johnson', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 19)),
-                          ],
+                        child: FutureBuilder<AppUser.User?>(
+                          future: FirebaseService().getUser(FirebaseAuth.instance.currentUser?.uid ?? ''),
+                          builder: (context, snapshot) {
+                            final user = snapshot.data;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Good $_greeting', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 13)),
+                                Text(user?.name ?? 'Loading...', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 19)),
+                              ],
+                            );
+                          },
                         ),
                       ),
                       Container(
@@ -172,7 +188,7 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
                       Expanded(child: _buildFeatureCard(context, 'Notes', 'Share & discover', Icons.auto_stories_rounded, const [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
                         onTap: () => context.findAncestorStateOfType<MainScreenState>()?.navigateToTab(1))),
                       const SizedBox(width: 14),
-                      Expanded(child: _buildFeatureCard(context, 'Events', 'What\'s happening', Icons.celebration_rounded, const [Color(0xFFF59E0B), Color(0xFFD97706)],
+                      Expanded(child: _buildFeatureCard(context, 'Events', r"What's happening", Icons.celebration_rounded, const [Color(0xFFF59E0B), Color(0xFFD97706)],
                         onTap: () => context.findAncestorStateOfType<MainScreenState>()?.navigateToTab(2))),
                     ],
                   ),
@@ -318,3 +334,4 @@ class _DashboardTabState extends State<DashboardTab> with TickerProviderStateMix
     );
   }
 }
+

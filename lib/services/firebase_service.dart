@@ -48,11 +48,14 @@ class FirebaseService {
 
   Future<void> signOut() => _auth.signOut();
 
-  // Users
+// Users
   Future<AppUser.User?> getUser(String uid) async {
     DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
     return doc.exists ? AppUser.User.fromFirestore(doc.data() as Map<String, dynamic>) : null;
   }
+
+  Stream<AppUser.User?> get currentUserStream => _auth.authStateChanges().asyncMap((user) => user != null ? getUser(user.uid) : null);
+
 
   // Lost Items
   Future<void> postLostItem(LostItem item, XFile imageFile) async {

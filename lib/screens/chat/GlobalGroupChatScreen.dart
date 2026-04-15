@@ -32,20 +32,19 @@ class _GlobalGroupChatScreenState extends State<GlobalGroupChatScreen> {
   }
 
   String _formatTime(dynamic timestamp) {
-    if (timestamp == null) return '';
-    final date = timestamp is Timestamp ? timestamp.toDate() : timestamp as DateTime;
+    if (timestamp == null) return 'now';
+    final dateTime = timestamp.toDate();
     final now = DateTime.now();
-    final diff = now.difference(date);
+    final diff = now.difference(dateTime);
     if (diff.inMinutes < 1) return 'now';
     if (diff.inHours < 1) return '${diff.inMinutes}m';
     if (diff.inDays < 1) return '${diff.inHours}h';
-    return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
-  void _sendMessage() async {
+  Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
-
     await FirebaseService().sendGroupMessage(text);
     _messageController.clear();
   }
@@ -53,17 +52,41 @@ class _GlobalGroupChatScreenState extends State<GlobalGroupChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: Row(
           children: [
-            const Icon(Icons.group, color: Colors.white),
-            const SizedBox(width: 8),
-            const Text('Campus Group', style: TextStyle(fontWeight: FontWeight.bold)),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.group, color: Colors.blue),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Campus Group Chat', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Member count • online', style: TextStyle(fontSize: 14, color: Colors.white70)),
+                ],
+              ),
+            ),
           ],
         ),
         backgroundColor: AppTheme.primary,
-        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
+          PopupMenuButton(
+            itemBuilder: (context) => const [
+              PopupMenuItem(child: Text('Members')),
+              PopupMenuItem(child: Text('Mute notifications')),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -72,72 +95,103 @@ class _GlobalGroupChatScreenState extends State<GlobalGroupChatScreen> {
               stream: FirebaseService().groupChatStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
                 }
                 final messages = snapshot.data ?? [];
                 if (messages.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text('No messages yet'),
-                        Text('Send the first message!'),
+                      children: [
+                        Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey),
+                        const SizedBox(height: 24),
+                        const Text('Welcome to Group Chat!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        const Text('Send your first message below'),
+                        const SizedBox(height: 40),
                       ],
                     ),
                   );
                 }
                 return ListView.builder(
                   controller: _scrollController,
-                  reverse: true,
                   padding: const EdgeInsets.all(16),
+                  reverse: true,
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final isMe = message.senderId == FirebaseAuth.instance.currentUser?.uid;
-                    return Align(
-                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isMe ? AppTheme.primary : Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              message.text,
-                              style: TextStyle(
-                                color: isMe ? Colors.white : Colors.black87,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _formatTime(message.timestamp),
-                                  style: TextStyle(
-                                    color: isMe ? Colors.white70 : Colors.grey,
-                                    fontSize: 12,
+                    final msg = messages[index];
+                    final isMine = msg.senderId == FirebaseService().currentUser?.uid;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (!isMine)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: CircleAvatar(
+                                radius: 16,
+                                backgroundColor: avatarColor(msg.senderName),
+                                child: Text(
+                                  initials(msg.senderName),
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
                                 ),
-                                if (isMe) const Icon(Icons.check, color: Colors.white70, size: 16),
-                              ],
+                              ),
                             ),
-                          ],
-                        ),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isMine ? AppTheme.primary : Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 2,
+                                    offset: const Offset(0, 1),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    msg.text,
+                                    style: TextStyle(
+                                      color: isMine ? Colors.white : Colors.black87,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _formatTime(msg.timestamp),
+                                        style: TextStyle(
+                                          color: isMine ? Colors.white70 : Colors.grey[600],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      if (isMine) ...const [
+                                        SizedBox(width: 4),
+                                        Icon(Icons.check, size: 16, color: Colors.white70),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     );
                   },
@@ -145,41 +199,65 @@ class _GlobalGroupChatScreenState extends State<GlobalGroupChatScreen> {
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'Type message...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide(color: AppTheme.primary),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+Padding(
+              padding: EdgeInsets.only(
+                left: 12,
+                right: 12,
+                bottom: MediaQuery.of(context).padding.bottom + 100,  // Above bottom nav
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -2),
                     ),
-                    maxLines: null,
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                FloatingActionButton(
-                  mini: true,
-                  onPressed: _sendMessage,
-                  backgroundColor: AppTheme.primary,
-                  child: const Icon(Icons.send, color: Colors.white),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.grey),
+                      onPressed: () {},
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        decoration: InputDecoration(
+                          hintText: 'Type a message',
+                          border: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                        ),
+                        maxLines: null,
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _sendMessage,
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary,
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: const Icon(Icons.send, color: Colors.white),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );

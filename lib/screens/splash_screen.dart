@@ -32,10 +32,16 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic));
 
     // Staggered animation sequence
-    _scaleController.forward();
-    Future.delayed(const Duration(milliseconds: 400), () => _fadeController.forward());
-    Future.delayed(const Duration(milliseconds: 600), () => _slideController.forward());
-    Future.delayed(const Duration(milliseconds: 800), () => _progressController.forward());
+_scaleController.forward();
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (_fadeController.isAnimating || !_fadeController.isCompleted) _fadeController.forward();
+    });
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (_slideController.isAnimating || !_slideController.isCompleted) _slideController.forward();
+    });
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (_progressController.isAnimating || !_progressController.isCompleted) _progressController.forward();
+    });
 
     Future.delayed(const Duration(milliseconds: 3200), () {
       if (mounted) {
